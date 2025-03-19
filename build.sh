@@ -21,13 +21,13 @@
 
 # Set Kernel Build Variables
 DEVICE_CODENAME="stone"  # Device codename (e.g., veux, garnet, etc.)
-DEVICE_NAME="POCO X5 5G/Redmi Note 12 5G/Note 12R Pro"          # Device Market name (e.g., POCO X4 PRO 5G)
-KERNEL_NAME="Starry"    # Kernel name
-KERNEL_DEFCONFIG="vendor/${DEVICE_CODENAME}_qgki_defconfig"
+DEVICE_NAME="POCO X5 5G/Redmi Note 12 5G/Note 12R Pro"           # Leave empty to set manually
+KERNEL_NAME="starry"    # Kernel name
+KERNEL_DEFCONFIG="${DEVICE_CODENAME}_qgki_defconfig"
 ANYKERNEL3_DIR=$PWD/AnyKernel3/
 FINAL_KERNEL_ZIP="${KERNEL_NAME}-Kernel-${DEVICE_CODENAME}-$(date '+%Y%m%d').zip"
 
-# Set Build Status (Change to "STABLE/TESTING" if needed)
+# Set Build Status (Change to "TESTING" if needed)
 BUILD_STATUS="STABLE"
 
 # Get Hostname
@@ -76,7 +76,7 @@ send_message "🔥 *${KERNEL_NAME} Kernel Build Started\!*
 📱 *Device:* \`${DEVICE_NAME} (${DEVICE_CODENAME})\`
 🖥 *Building on:* \`$(hostname)\`
 ⚙️ *Compiler:* \`${COMPILER_NAME}\`
-🔰 *Build Status:*   \`${BUILD_STATUS}\`"
+🔰 *Build Status:* STABLE"
 
 # Clean previous builds
 make O=out clean
@@ -103,7 +103,7 @@ fi
 
 send_message "✅ *${KERNEL_NAME} Kernel built successfully\!* Zipping files..."
 
-# Move files to AnyKernel3 )
+# Move files to AnyKernel3
 rm -rf $ANYKERNEL3_DIR/Image $ANYKERNEL3_DIR/dtbo.img $ANYKERNEL3_DIR/dtb
 cp $PWD/out/arch/arm64/boot/Image $ANYKERNEL3_DIR/
 cp $PWD/out/arch/arm64/boot/dtbo.img $ANYKERNEL3_DIR/
