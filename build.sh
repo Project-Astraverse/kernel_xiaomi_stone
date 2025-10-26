@@ -12,7 +12,7 @@
 # Set Kernel Build Variables
 DEVICE_CODENAME="stone"  # Device codename (e.g., veux, garnet, etc.)
 DEVICE_NAME="POCO X5 5G/Redmi Note 12 5G/Note 12R Pro"           # Leave empty to set manually
-KERNEL_NAME="starry"    # Kernel name
+KERNEL_NAME="Starry"    # Kernel name
 KERNEL_DEFCONFIG="${DEVICE_CODENAME}_defconfig"
 ANYKERNEL3_DIR=$PWD/AnyKernel3/
 FINAL_KERNEL_ZIP="${KERNEL_NAME}-Kernel-${DEVICE_CODENAME}-$(date '+%Y%m%d').zip"
