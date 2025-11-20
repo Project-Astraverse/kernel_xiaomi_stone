@@ -11,13 +11,63 @@
 
 # Set Kernel Build Variables
 DEVICE_CODENAME="stone"  # Device codename (e.g., veux, garnet, etc.)
-DEVICE_NAME="POCO X5 5G/Redmi Note 12 5G/Note 12R Pro"           # Leave empty to set manually
-KERNEL_NAME="Starry"    # Kernel name
+DEVICE_NAME="POCO X5 5G/Redmi Note 12 5G/Note 12R Pro"      # Device Market name (e.g., POCO X4 PRO 5G)
+KERNEL_NAME="Starry"      # Kernel name
 KERNEL_DEFCONFIG="${DEVICE_CODENAME}_defconfig"
 ANYKERNEL3_DIR=$PWD/AnyKernel3/
-FINAL_KERNEL_ZIP="${KERNEL_NAME}-[KSU]-Kernel-${DEVICE_CODENAME}-$(date '+%Y%m%d').zip"
-BUILD_STATUS="STABLE"
 
+# SourceForge Upload Config
+SF_USER="takixamru"
+SF_PROJECT="roms"        # lowercase
+SF_FOLDER="stone"              # folder inside SF project
+
+# Changelog Repo Config
+CHANGELOG_REPO="$HOME/changelogs"     # local clone of your GitHub changelogs repo
+CHANGELOG_DEVICE_DIR="${CHANGELOG_REPO}/${DEVICE_CODENAME}"
+
+# Build type selection
+
+echo ""
+echo "=============================="
+echo "   SELECT YOUR BUILD TYPE"
+echo "=============================="
+echo ""
+
+PS3="Choose option (1-5): "
+
+select opt in "STABLE" "BETA" "ALPHA" "TEST" "CUSTOM"; do
+    case $opt in
+        "STABLE")
+            BUILD_STATUS="STABLE"
+            break
+            ;;
+        "BETA")
+            BUILD_STATUS="BETA"
+            break
+            ;;
+        "ALPHA")
+            BUILD_STATUS="ALPHA"
+            break
+            ;;
+        "TEST")
+            BUILD_STATUS="TEST"
+            break
+            ;;
+        "CUSTOM")
+            read -rp "Enter custom tag: " CUSTOM_TAG
+            BUILD_STATUS="$CUSTOM_TAG"
+            break
+            ;;
+        *)
+            echo "Invalid choice. Try again."
+            ;;
+    esac
+done
+echo ""
+echo ">>> Selected Build Type: $BUILD_STATUS"
+echo ""
+
+FINAL_KERNEL_ZIP="${KERNEL_NAME}-Kernel-[KSU]-${BUILD_STATUS}-${DEVICE_CODENAME}-$(date '+%Y%m%d').zip"
 BUILD_HOSTNAME=$(hostname)
 COMPILER_PATH="$HOME/clang-r547379/bin"
 
@@ -38,10 +88,9 @@ export ARCH=arm64
 export KBUILD_BUILD_HOST="アムリトクン"
 export KBUILD_BUILD_USER="私は彼女を愛している"
 export KBUILD_COMPILER_STRING="$COMPILER_NAME"
-
 # Telegram Bot Config
-BOT_TOKEN="put telegram bot token"
-CHAT_ID="put telegram channel/chat id"
+BOT_TOKEN=""
+CHAT_ID=""
 
 # Function to send Telegram message
 send_message() {
@@ -50,6 +99,51 @@ send_message() {
          -d "parse_mode=MarkdownV2" \
          -d "text=$1"
 }
+
+# Upload to SFINAL_KERNEL_ZIP=
+upload_to_sourceforge() {
+    local ZIP_FILE="$1"
+    local REMOTE_PATH="/home/frs/project/${SF_PROJECT:0:1}/${SF_PROJECT:0:1}${SF_PROJECT:1:1}/${SF_PROJECT}/${SF_FOLDER}/"
+
+    echo "Uploading $ZIP_FILE to SourceForge..."
+
+    rsync -avP --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
+        "$ZIP_FILE" \
+        "${SF_USER}@frs.sourceforge.net:${REMOTE_PATH}"
+
+    if [ $? -ne 0 ]; then
+        send_message "$(escape_markdown "❌ SourceForge upload failed!")"
+    else
+        send_message "$(escape_markdown "📤 Uploaded to SourceForge successfully")"
+    fi
+}
+# Push changelogs
+
+push_changelog() {
+    local DATE_TAGINAL_KERNEL_ZIP=
+    DATE_TAG="$(date '+%Y-%m-%d_%H-%M')"
+    local FILE="${CHANGELOG_DEVICE_DIR}/${DATE_TAG}.txt"
+
+    mkdir -p "${CHANGELOG_DEVICE_DIR}"
+
+    {
+        echo "Kernel: ${KERNEL_NAME}"
+        echo "Device: ${DEVICE_NAME} (${DEVICE_CODENAME})"
+        echo "Build Type: ${BUILD_STATUS}"
+        echo "Compiler: ${COMPILER_NAME}"
+        echo "Date: ${DATE_TAG}"
+        echo ""
+        echo "==== Latest Commits ===="
+        git log --oneline -100
+    } > "${FILE}"
+
+    cd "${CHANGELOG_REPO}" || exit 1
+    git pull --rebase
+    git add "${FILE}"
+    git commit -m "changelog(${DEVICE_CODENAME}): ${KERNEL_NAME} ${BUILD_STATUS} ${DATE_TAG}"
+    git push
+}
+
 
 # Clone Clang if missing
 if ! [ -d "$HOME/clang-r547379" ]; then
@@ -99,19 +193,39 @@ cp $PWD/out/arch/arm64/boot/Image $ANYKERNEL3_DIR/
 cp $PWD/out/arch/arm64/boot/dtbo.img $ANYKERNEL3_DIR/
 cp $PWD/out/arch/arm64/boot/dtb.img $ANYKERNEL3_DIR/dtb
 
+
 cd $ANYKERNEL3_DIR/
 zip -r9 "../$FINAL_KERNEL_ZIP" * -x README $FINAL_KERNEL_ZIP
+cd ..
 
-# Upload to Telegram
-send_message "$(escape_markdown "📤 Uploading ${KERNEL_NAME} Kernel zip...")"
-curl -F chat_id="$CHAT_ID" \
-     -F document=@"../$FINAL_KERNEL_ZIP" \
-     -F parse_mode="MarkdownV2" \
-     -F caption="✅ *$(escape_markdown "$KERNEL_NAME") Kernel for $(escape_markdown "$DEVICE_CODENAME") $(escape_markdown "$DEVICE_NAME")*
+# Upload ONLY release/stable builds to SourceForge
+if [ "$BUILD_STATUS" = "STABLE" ] || [ "$BUILD_STATUS" = "RELEASE" ]; then
+    upload_to_sourceforge "$PWD/$FINAL_KERNEL_ZIP"
+else
+    echo "Skipping SourceForge upload (non-release build)"
+fi
+
+# Push changelog only for release/stable builds
+if [ "$BUILD_STATUS" = "STABLE" ] || [ "$BUILD_STATUS" = "RELEASE" ]; then
+    echo "Pushing changelog..."
+    push_changelog
+else
+    echo "Skipping changelog push (non-release build)"
+fi
+
+# Upload only if NOT a release/STABLE build
+if [ "$BUILD_STATUS" != "STABLE" ] && [ "$BUILD_STATUS" != "RELEASE" ]; then
+    send_message "$(escape_markdown "📤 Uploading ${KERNEL_NAME} Kernel zip...")"
+
+    curl -F chat_id="$CHAT_ID" \
+         -F document=@"$PWD/$FINAL_KERNEL_ZIP" \
+         -F parse_mode="MarkdownV2" \
+         -F caption="✅ *$(escape_markdown "$KERNEL_NAME") Kernel for $(escape_markdown "$DEVICE_CODENAME") $(escape_markdown "$DEVICE_NAME")*
 🖥️ *Built on:* \`$(escape_markdown "$BUILD_HOSTNAME")\`
 ⚙️ *Compiler:* \`$(escape_markdown "$COMPILER_NAME")\`
 🔰 *Build Status:* \`$(escape_markdown "$BUILD_STATUS")\`" \
      "https://api.telegram.org/bot$BOT_TOKEN/sendDocument"
+fi
 
 # Finish
 BUILD_END=$(date +"%s")
@@ -124,3 +238,4 @@ rm -rf out/
 rm -rf $ANYKERNEL3_DIR/Image $ANYKERNEL3_DIR/dtbo.img $ANYKERNEL3_DIR/dtb
 
 exit 0
+
